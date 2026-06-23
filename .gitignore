@@ -31,5 +31,9 @@ prisma/migrations/
 # Coverage
 coverage/
 
+# Uploads (runtime artifacts)
+uploads/
+
 # TypeScript
 *.tsbuildinfo
+node_modules
