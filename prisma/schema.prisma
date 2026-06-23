@@ -1,0 +1,192 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PRO
+  PREMIUM
+}
+
+enum DifficultyLevel {
+  ENTRY
+  JUNIOR
+  MID
+  SENIOR
+  STAFF
+  PRINCIPAL
+}
+
+enum InterviewStatus {
+  PENDING
+  WARMUP
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum QuestionType {
+  WARMUP
+  TECHNICAL
+  FOLLOWUP
+}
+
+enum Language {
+  EN
+  PT_BR
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+  name         String
+  avatarUrl    String?
+  provider     String?
+  providerId   String?
+  role         UserRole  @default(USER)
+
+  subscription Subscription?
+  interviews   Interview[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan   Plan @default(FREE)
+
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+
+  interviewsUsed Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TechStack {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  slug     String  @unique
+  category String
+  iconUrl  String?
+
+  interviews InterviewTechStack[]
+}
+
+model Interview {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  level    DifficultyLevel
+  status   InterviewStatus @default(PENDING)
+  language Language        @default(EN)
+  /// Total questions (warm-ups + technical + follow-ups) the candidate chose for this session (5–15).
+  questionCount Int        @default(6)
+
+  techStacks InterviewTechStack[]
+  questions  Question[]
+  feedback   FeedbackReport?
+  recording  Recording?
+
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model InterviewTechStack {
+  interviewId String
+  techStackId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  techStack   TechStack @relation(fields: [techStackId], references: [id])
+
+  @@id([interviewId, techStackId])
+}
+
+model Question {
+  id          String @id @default(cuid())
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  type       QuestionType
+  text       String
+  difficulty Float
+  order      Int
+
+  answer Answer?
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  questionId String   @unique
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  transcript String
+  score      Float?
+  evaluation Json?
+
+  createdAt DateTime @default(now())
+}
+
+model FeedbackReport {
+  id          String    @id @default(cuid())
+  interviewId String    @unique
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  overallScore   Float
+  topicBreakdown Json
+  strengths      String[]
+  improvements   String[]
+  nextSteps      String[]
+  summary        String
+
+  createdAt DateTime @default(now())
+}
+
+model Recording {
+  id          String    @id @default(cuid())
+  interviewId String    @unique
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  storageKey String
+  duration   Int
+  sizeBytes  Int
+  mimeType   String
+
+  createdAt DateTime @default(now())
+}

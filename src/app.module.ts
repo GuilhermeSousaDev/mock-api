@@ -1,0 +1,41 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import configuration from './config/configuration';
+import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { InterviewsModule } from './modules/interviews/interviews.module';
+import { QuestionsModule } from './modules/questions/questions.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
+import { RecordingsModule } from './modules/recordings/recordings.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { TechStacksModule } from './modules/tech-stacks/tech-stacks.module';
+import { AiModule } from './modules/ai/ai.module';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: '.env',
+    }),
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    InterviewsModule,
+    QuestionsModule,
+    FeedbackModule,
+    RecordingsModule,
+    SubscriptionsModule,
+    TechStacksModule,
+    AiModule,
+  ],
+  providers: [
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+  ],
+})
+export class AppModule {}
