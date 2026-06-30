@@ -8,7 +8,6 @@ import { UsersModule } from './modules/users/users.module';
 import { InterviewsModule } from './modules/interviews/interviews.module';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
-import { RecordingsModule } from './modules/recordings/recordings.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { TechStacksModule } from './modules/tech-stacks/tech-stacks.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -28,7 +27,6 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     InterviewsModule,
     QuestionsModule,
     FeedbackModule,
-    RecordingsModule,
     SubscriptionsModule,
     TechStacksModule,
     AiModule,

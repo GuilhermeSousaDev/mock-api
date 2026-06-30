@@ -9,10 +9,6 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // Recordings are uploaded as base64 JSON, which exceeds the default 100kb limit.
-  // base64 inflates the audio by ~33%, so keep generous headroom for long sessions.
-  app.useBodyParser('json', { limit: '50mb' });
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

@@ -114,7 +114,6 @@ model Interview {
   techStacks InterviewTechStack[]
   questions  Question[]
   feedback   FeedbackReport?
-  recording  Recording?
 
   startedAt DateTime?
   endedAt   DateTime?
@@ -174,19 +173,6 @@ model FeedbackReport {
   improvements   String[]
   nextSteps      String[]
   summary        String
-
-  createdAt DateTime @default(now())
-}
-
-model Recording {
-  id          String    @id @default(cuid())
-  interviewId String    @unique
-  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-
-  storageKey String
-  duration   Int
-  sizeBytes  Int
-  mimeType   String
 
   createdAt DateTime @default(now())
 }

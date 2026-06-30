@@ -136,11 +136,6 @@ export class SubscriptionsService {
     return { allowed: true };
   }
 
-  async canRecordInterview(userId: string): Promise<boolean> {
-    const sub = await this.getSubscription(userId);
-    return sub?.plan === Plan.PRO || sub?.plan === Plan.PREMIUM;
-  }
-
   async incrementInterviewCount(userId: string) {
     return this.prisma.subscription.update({
       where: { userId },

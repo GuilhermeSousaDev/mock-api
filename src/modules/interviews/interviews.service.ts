@@ -32,7 +32,6 @@ const interviewInclude = {
   techStacks: { include: { techStack: true } },
   questions: { include: { answer: true }, orderBy: { order: 'asc' as const } },
   feedback: true,
-  recording: true,
 };
 
 @Injectable()
@@ -50,7 +49,6 @@ export class InterviewsService {
       include: {
         techStacks: { include: { techStack: true } },
         feedback: true,
-        recording: true,
       },
       orderBy: { createdAt: 'desc' },
     });
