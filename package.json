@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && nest build && npm run build:seed",
+    "build:seed": "tsc prisma/seed.ts --outDir dist --rootDir prisma --module commonjs --target ES2021 --esModuleInterop --skipLibCheck",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
