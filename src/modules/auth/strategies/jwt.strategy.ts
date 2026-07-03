@@ -15,16 +15,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     private readonly usersService: UsersService,
   ) {
+    const secret = config.get<string>('jwt.secret');
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('jwt.secret')!,
+      secretOrKey: secret,
     });
   }
 
   async validate(payload: JwtPayload) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) throw new UnauthorizedException();
-    return user;
+    // req.user is serialized straight into /auth/me and /users/me responses —
+    // credentials and provider internals must never leave the API.
+    const { passwordHash: _hash, provider: _prov, providerId: _provId, ...safeUser } = user;
+    return safeUser;
   }
 }

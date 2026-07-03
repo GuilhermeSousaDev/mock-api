@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -21,6 +22,9 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
       load: [configuration],
       envFilePath: '.env',
     }),
+    // Global per-IP rate limit; payment endpoints tighten this further with
+    // @Throttle to blunt card-testing abuse.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -33,6 +37,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
   ],
 })

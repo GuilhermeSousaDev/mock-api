@@ -22,14 +22,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const status = carriedStatus;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : // Only expose the message for client errors (4xx); never leak 5xx internals.
-          status < HttpStatus.INTERNAL_SERVER_ERROR &&
-            exception instanceof Error
-          ? exception.message
-          : 'Internal server error';
+    // Only HttpExceptions were written for the client — anything else (Stripe
+    // SDK errors, Prisma errors, body-parser, ...) may carry a 4xx status yet
+    // still describe internals, so it gets a generic message. Normalise to a
+    // plain string so clients never receive nested error objects.
+    const message = this.toClientMessage(exception, status);
 
     response.status(status).json({
       success: false,
@@ -38,5 +35,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
     });
+  }
+
+  private toClientMessage(exception: unknown, status: number): string {
+    if (exception instanceof HttpException) {
+      const body = exception.getResponse();
+      if (typeof body === 'string') return body;
+      const inner = (body as { message?: unknown }).message;
+      if (typeof inner === 'string') return inner;
+      // class-validator reports an array of constraint messages.
+      if (Array.isArray(inner)) return inner.join('; ');
+      return exception.message;
+    }
+    return status < HttpStatus.INTERNAL_SERVER_ERROR
+      ? 'Bad request'
+      : 'Internal server error';
   }
 }

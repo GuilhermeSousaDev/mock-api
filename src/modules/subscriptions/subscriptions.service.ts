@@ -91,18 +91,36 @@ export class SubscriptionsService {
       throw new BadRequestException('Payment is missing a valid paid plan');
     }
 
+    // One-time use: atomically claim the intent id. A succeeded PaymentIntent
+    // must not be replayable — without this, re-posting the same id would
+    // restart the billing period (and reset usage) forever off a single
+    // payment. `updateMany` matches 0 rows when the id was already consumed.
     const now = new Date();
-    return this.prisma.subscription.update({
-      where: { userId },
+    const claimed = await this.prisma.subscription.updateMany({
+      where: {
+        userId,
+        OR: [
+          { lastPaymentIntentId: null },
+          { lastPaymentIntentId: { not: paymentIntentId } },
+        ],
+      },
       data: {
         plan,
         interviewsUsed: 0,
         currentPeriodStart: now,
         currentPeriodEnd: new Date(now.getTime() + PERIOD_MS),
+        lastPaymentIntentId: paymentIntentId,
         stripeCustomerId:
           typeof intent.customer === 'string' ? intent.customer : undefined,
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException('This payment has already been processed');
+    }
+
+    const subscription = await this.getSubscription(userId);
+    if (!subscription) throw new NotFoundException('Subscription not found');
+    return subscription;
   }
 
   /**

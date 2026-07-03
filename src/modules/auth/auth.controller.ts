@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -12,11 +13,15 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Tight per-IP limits: registration spam and credential brute-force are the
+  // two cheapest attacks against a public auth API.
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @UseGuards(LocalAuthGuard)
   @Post('login')
   login(@Req() req: any, @Body() _dto: LoginDto) {

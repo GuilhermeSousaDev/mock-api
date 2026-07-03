@@ -15,11 +15,17 @@ import { LocalStrategy } from './strategies/local.strategy';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('jwt.secret'),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        signOptions: { expiresIn: config.get('jwt.expiresIn') as any },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('jwt.secret');
+        if (!secret) {
+          throw new Error('JWT_SECRET is not configured');
+        }
+        return {
+          secret,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          signOptions: { expiresIn: config.get('jwt.expiresIn') as any },
+        };
+      },
     }),
   ],
   providers: [AuthService, JwtStrategy, LocalStrategy],

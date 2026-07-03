@@ -82,6 +82,9 @@ model Subscription {
 
   stripeCustomerId     String? @unique
   stripeSubscriptionId String? @unique
+  // Last PaymentIntent consumed by a checkout confirmation. Unique so a paid
+  // intent can only ever upgrade one subscription, once (replay protection).
+  lastPaymentIntentId  String? @unique
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
 

@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Plan } from '@prisma/client';
 // `stripe` is a CommonJS `export =` module. This project does not enable
@@ -32,6 +37,32 @@ export class StripeService {
     return this.config.get<string>('stripe.publishableKey') ?? '';
   }
 
+  /**
+   * Logs the full Stripe error server-side and rethrows a sanitized
+   * HttpException. Raw Stripe SDK errors must never escape this service: they
+   * carry a 4xx `statusCode`, so the global exception filter would forward
+   * `err.message` verbatim — leaking account mode, object ids and request
+   * internals (and enabling PaymentIntent id probing via error differences).
+   */
+  private handleStripeError(err: unknown, context: string): never {
+    if (err instanceof Stripe.errors.StripeError) {
+      this.logger.error(
+        `Stripe ${err.type} during ${context}: ${err.message} ` +
+          `(code: ${err.code ?? 'n/a'}, request: ${err.requestId ?? 'n/a'})`,
+      );
+      // Card decline messages are written by Stripe for the shopper — safe.
+      if (err.type === 'StripeCardError') {
+        throw new BadRequestException(err.message);
+      }
+      if (err.type === 'StripeInvalidRequestError') {
+        throw new BadRequestException('The payment could not be processed');
+      }
+      // Rate limits, connectivity, auth — our problem, not the client's.
+      throw new ServiceUnavailableException('Payment provider is temporarily unavailable');
+    }
+    throw err;
+  }
+
   /** Maps an app plan to its configured Stripe recurring price id. */
   priceIdForPlan(plan: Plan): string {
     const priceId =
@@ -61,18 +92,28 @@ export class StripeService {
       try {
         const existing = await this.stripe.customers.retrieve(params.existingId);
         if (!existing.deleted) return existing.id;
-      } catch {
-        // Stored id no longer resolves (e.g. test data wiped) — recreate below.
-        this.logger.warn(`Stripe customer ${params.existingId} not found; recreating`);
+      } catch (err) {
+        // Only recreate when the stored id genuinely no longer resolves (e.g.
+        // test data wiped). Transient failures (rate limit, network) must not
+        // silently mint duplicate customers.
+        if (err instanceof Stripe.errors.StripeError && err.code === 'resource_missing') {
+          this.logger.warn(`Stripe customer ${params.existingId} not found; recreating`);
+        } else {
+          this.handleStripeError(err, 'customer lookup');
+        }
       }
     }
 
-    const customer = await this.stripe.customers.create({
-      email: params.email,
-      name: params.name,
-      metadata: { userId: params.userId },
-    });
-    return customer.id;
+    try {
+      const customer = await this.stripe.customers.create({
+        email: params.email,
+        name: params.name,
+        metadata: { userId: params.userId },
+      });
+      return customer.id;
+    } catch (err) {
+      this.handleStripeError(err, 'customer creation');
+    }
   }
 
   /**
@@ -85,35 +126,43 @@ export class StripeService {
     userId: string;
   }): Promise<{ clientSecret: string; paymentIntentId: string; amount: number; currency: string }> {
     const priceId = this.priceIdForPlan(params.plan);
-    const price = await this.stripe.prices.retrieve(priceId);
-    if (!price.unit_amount) {
-      throw new BadRequestException(`Stripe price ${priceId} has no fixed unit amount`);
+    try {
+      const price = await this.stripe.prices.retrieve(priceId);
+      if (!price.unit_amount) {
+        throw new BadRequestException(`Stripe price ${priceId} has no fixed unit amount`);
+      }
+
+      const intent = await this.stripe.paymentIntents.create({
+        amount: price.unit_amount,
+        currency: price.currency,
+        customer: params.customerId,
+        // Lets Stripe surface every payment method enabled in the dashboard via
+        // the Payment Element, with cards always available.
+        automatic_payment_methods: { enabled: true },
+        metadata: { userId: params.userId, plan: params.plan, priceId },
+      });
+
+      if (!intent.client_secret) {
+        throw new BadRequestException('Stripe did not return a client secret');
+      }
+
+      return {
+        clientSecret: intent.client_secret,
+        paymentIntentId: intent.id,
+        amount: price.unit_amount,
+        currency: price.currency,
+      };
+    } catch (err) {
+      this.handleStripeError(err, 'payment intent creation');
     }
-
-    const intent = await this.stripe.paymentIntents.create({
-      amount: price.unit_amount,
-      currency: price.currency,
-      customer: params.customerId,
-      // Lets Stripe surface every payment method enabled in the dashboard via
-      // the Payment Element, with cards always available.
-      automatic_payment_methods: { enabled: true },
-      metadata: { userId: params.userId, plan: params.plan, priceId },
-    });
-
-    if (!intent.client_secret) {
-      throw new BadRequestException('Stripe did not return a client secret');
-    }
-
-    return {
-      clientSecret: intent.client_secret,
-      paymentIntentId: intent.id,
-      amount: price.unit_amount,
-      currency: price.currency,
-    };
   }
 
   /** Fetches the live PaymentIntent so its status can be verified server-side. */
-  retrievePaymentIntent(id: string) {
-    return this.stripe.paymentIntents.retrieve(id);
+  async retrievePaymentIntent(id: string) {
+    try {
+      return await this.stripe.paymentIntents.retrieve(id);
+    } catch (err) {
+      this.handleStripeError(err, 'payment intent retrieval');
+    }
   }
 }

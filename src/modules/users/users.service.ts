@@ -7,17 +7,22 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: Prisma.UserCreateInput) {
-    const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
-    if (existing) throw new ConflictException('Email already in use');
-
-    const user = await this.prisma.user.create({
-      data: {
-        ...data,
-        subscription: { create: { plan: 'FREE' } },
-      },
-      include: { subscription: true },
-    });
-    return user;
+    try {
+      return await this.prisma.user.create({
+        data: {
+          ...data,
+          subscription: { create: { plan: 'FREE' } },
+        },
+        include: { subscription: true },
+      });
+    } catch (err) {
+      // Unique-constraint violation — relying on the DB (instead of a prior
+      // findUnique check) keeps concurrent registrations from crashing as 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('Email already in use');
+      }
+      throw err;
+    }
   }
 
   findById(id: string) {

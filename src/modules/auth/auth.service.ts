@@ -4,6 +4,11 @@ import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 
+// Compared against when the email does not exist, so a login attempt costs
+// the same bcrypt work either way — response timing must not reveal whether
+// an account exists.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('timing-equalizer-placeholder', 12);
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,9 +28,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !user.passwordHash || !valid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
     return user;
   }
 
