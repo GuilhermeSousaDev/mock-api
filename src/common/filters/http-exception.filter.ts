@@ -1,8 +1,10 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(AllExceptionsFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -27,6 +29,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // still describe internals, so it gets a generic message. Normalise to a
     // plain string so clients never receive nested error objects.
     const message = this.toClientMessage(exception, status);
+
+    // 5xx responses hide the real error from the client, so it must be
+    // logged here — nothing downstream will ever see it otherwise.
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(
+        `${request.method} ${request.url} -> ${status}`,
+        exception instanceof Error ? exception.stack : JSON.stringify(exception),
+      );
+    }
 
     response.status(status).json({
       success: false,
