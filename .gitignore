@@ -25,9 +25,6 @@ npm-debug.log*
 *.swp
 *.swo
 
-# Prisma
-prisma/migrations/
-
 # Coverage
 coverage/
 
